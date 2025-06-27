@@ -2,20 +2,44 @@
 import Sidebar from './components/Sidebar.vue';
 import ChatView from './components/ChatView.vue';
 import Dropdown from './components/Dropdown.vue';
-import { ref } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { ChevronDown, User, LogOut } from 'lucide-vue-next';
 
 const models = ref(['GPT-4', 'GPT-3.5-Turbo', 'Gemini-Pro']);
 const selectedModel = ref('GPT-4');
+
+const isSidebarExpanded = ref(true);
+
+const toggleSidebar = () => {
+  isSidebarExpanded.value = !isSidebarExpanded.value;
+};
+
+const handleResize = () => {
+  if (window.innerWidth < 768) {
+    isSidebarExpanded.value = false;
+  } else {
+    isSidebarExpanded.value = true;
+  }
+};
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize);
+  handleResize(); // Initial check
+});
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize);
+});
+
 </script>
 
 <template>
   <div class="flex h-screen bg-gray-800 text-white">
     <!-- Sidebar -->
-    <Sidebar />
+    <Sidebar :is-expanded="isSidebarExpanded" @toggle-sidebar="toggleSidebar" />
 
     <!-- Main Content -->
-    <div class="flex-1 flex flex-col overflow-hidden">
+    <div class="flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out" >
       <header class="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 h-20">
         <!-- Model Selector -->
         <Dropdown>
