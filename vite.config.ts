@@ -15,8 +15,8 @@ export default defineConfig(async () => ({
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: 1420,
-    strictPort: true,
-    host: host || false,
+    strictPort: false, // Allow Vite to find an available port if 1420 is in use
+    host: true, // Allow external access
     hmr: host
       ? {
           protocol: "ws",
@@ -26,7 +26,8 @@ export default defineConfig(async () => ({
       : undefined,
     watch: {
       // 3. tell vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      ignored: ["**/src-tauri/**", "**/src-tauri/db.sqlite*"],
+      usePolling: true, // Helps with file watching in some environments
     },
   },
 }));
