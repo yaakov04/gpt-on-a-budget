@@ -11,8 +11,11 @@
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.1.11",
+    "@tailwindcss/vite": "^4.1.11",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
+    "lucide-vue-next": "^0.525.0",
+    "markdown-it": "^14.1.0",
     "vue": "^3.5.13"
   },
   "devDependencies": {
