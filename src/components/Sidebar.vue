@@ -9,13 +9,19 @@
       </button>
     </div>
     <nav class="flex-1 space-y-2 p-4 overflow-hidden">
-      <a href="#" class="flex items-center py-2 px-4 rounded hover:bg-gray-700">
+      <a href="#" class="flex items-center py-2 px-4 rounded hover:bg-gray-700" @click="conversationsStore.addConversation()">
         <Plus class="w-5 h-5 mr-3" />
         <span v-if="isExpanded">New Chat</span>
       </a>
-      <!-- Future chat history or other navigation items -->
-      <a v-if="isExpanded" v-for="i in 5" :key="i" href="#" class="block py-2 px-4 rounded hover:bg-gray-700 truncate">
-        Conversation Title {{ i }}
+      <!-- Chat history -->
+      <a v-if="isExpanded" v-for="conversation in conversationsStore.conversations" :key="conversation.id"
+        href="#" class="flex items-center justify-between py-2 px-4 rounded hover:bg-gray-700 truncate"
+        :class="{ 'bg-gray-700': conversation.id === conversationsStore.activeConversationId }"
+        @click="conversationsStore.selectConversation(conversation.id)">
+        <span>{{ conversation.title }}</span>
+        <button @click.stop="conversationsStore.deleteConversation(conversation.id)" class="text-gray-400 hover:text-white">
+          <Trash2 class="w-4 h-4" />
+        </button>
       </a>
     </nav>
     <div class="p-4 border-t border-gray-700 h-20 flex items-center">
@@ -28,7 +34,10 @@
 </template>
 
 <script setup lang="ts">
-import { Plus, Settings, Menu } from 'lucide-vue-next';
+import { Plus, Settings, Menu, Trash2 } from 'lucide-vue-next';
+import { useConversationsStore } from '../stores/conversations';
+
+const conversationsStore = useConversationsStore();
 
 defineProps({
   isExpanded: {

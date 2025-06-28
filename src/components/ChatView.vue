@@ -11,30 +11,43 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import Message from './Message.vue';
 import MessageInput from './MessageInput.vue';
+import { useConversationsStore } from '../stores/conversations';
 
-const messages = ref([
-  { id: 1, text: 'Hello!', isUser: false },
-  { id: 2, text: 'Hi there! How can I help you today?', isUser: true },
-  { id: 3, text: 'Here is some `code`', isUser: false },
-]);
+const conversationsStore = useConversationsStore();
 
-const handleSendMessage = (text: string) => {
-  messages.value.push({
+const messages = ref(conversationsStore.activeConversation?.messages || []);
+
+watch(() => conversationsStore.activeConversation, (newConversation) => {
+  messages.value = newConversation?.messages || [];
+}, { immediate: true });
+
+const isLoading = ref(false);
+
+const handleSendMessage = async (text: string) => {
+  if (!conversationsStore.activeConversationId) return;
+
+  const newMessage = {
     id: Date.now(),
     text,
     isUser: true,
-  });
+  };
+  conversationsStore.addMessageToConversation(conversationsStore.activeConversationId, newMessage);
+
+  isLoading.value = true;
 
   // Simulate a bot response
   setTimeout(() => {
-    messages.value.push({
-      id: Date.now() + 1,
-      text: 'This is a **simulated** response with [markdown](https://www.markdownguide.org/).',
-      isUser: false,
-    });
+    if (conversationsStore.activeConversationId) {
+      conversationsStore.addMessageToConversation(conversationsStore.activeConversationId, {
+        id: Date.now() + 1,
+        text: 'This is a **simulated** response with [markdown](https://www.markdownguide.org/).',
+        isUser: false,
+      });
+    }
+    isLoading.value = false;
   }, 1000);
 };
 </script>
