@@ -1,46 +1,68 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 
+// Matching the Rust structs
 export interface Message {
   id: number;
-  text: string;
-  isUser: boolean;
+  conversation_id: number;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  created_at: string;
 }
 
 export interface Conversation {
   id: number;
   title: string;
+  created_at: string;
+  llm_provider: string;
   messages: Message[];
 }
 
 export const useConversationsStore = defineStore('conversations', () => {
-  const conversations = ref<Conversation[]>([
-    { id: 1, title: 'New Chat 1', messages: [{ id: 1, text: 'Hello!', isUser: false }] },
-    { id: 2, title: 'New Chat 2', messages: [{ id: 1, text: 'Hi there!', isUser: false }] },
-  ]);
-  const activeConversationId = ref<number | null>(conversations.value.length > 0 ? conversations.value[0].id : null);
+  const conversations = ref<Conversation[]>([]);
+  const activeConversationId = ref<number | null>(null);
 
   const activeConversation = computed(() => {
-    return conversations.value.find(conv => conv.id === activeConversationId.value);
+    return conversations.value.find(conv => conv.id === activeConversationId.value) || null;
   });
 
-  function addConversation() {
-    const newId = Date.now();
-    conversations.value.push({
-      id: newId,
-      title: `New Chat ${conversations.value.length + 1}`,
-      messages: [],
-    });
-    activeConversationId.value = newId;
+  async function fetchConversations() {
+    try {
+      const fetchedConversations = await invoke<Conversation[]>('get_conversations');
+      conversations.value = fetchedConversations;
+      if (conversations.value.length > 0 && !activeConversationId.value) {
+        activeConversationId.value = conversations.value[0].id;
+      }
+    } catch (error) {
+      console.error("Failed to fetch conversations:", error);
+    }
   }
 
-  function deleteConversation(id: number) {
-    const index = conversations.value.findIndex(conv => conv.id === id);
-    if (index !== -1) {
-      conversations.value.splice(index, 1);
-      if (activeConversationId.value === id) {
-        activeConversationId.value = conversations.value.length > 0 ? conversations.value[0].id : null;
+  async function addConversation() {
+    try {
+      const newConversation = await invoke<Conversation>('create_conversation', {
+        title: `New Chat ${conversations.value.length + 1}`,
+      });
+      conversations.value.unshift(newConversation); // Add to the top
+      activeConversationId.value = newConversation.id;
+    } catch (error) {
+      console.error("Failed to create conversation:", error);
+    }
+  }
+
+  async function deleteConversation(id: number) {
+    try {
+      await invoke('delete_conversation', { id });
+      const index = conversations.value.findIndex(conv => conv.id === id);
+      if (index !== -1) {
+        conversations.value.splice(index, 1);
+        if (activeConversationId.value === id) {
+          activeConversationId.value = conversations.value.length > 0 ? conversations.value[0].id : null;
+        }
       }
+    } catch (error) {
+      console.error("Failed to delete conversation:", error);
     }
   }
 
@@ -48,10 +70,19 @@ export const useConversationsStore = defineStore('conversations', () => {
     activeConversationId.value = id;
   }
 
-  function addMessageToConversation(conversationId: number, message: Message) {
+  async function addMessageToConversation(conversationId: number, role: 'user' | 'assistant', content: string) {
     const conversation = conversations.value.find(conv => conv.id === conversationId);
     if (conversation) {
-      conversation.messages.push(message);
+        try {
+            const newMessage = await invoke<Message>('add_message', {
+                conversationId,
+                role,
+                content,
+            });
+            conversation.messages.push(newMessage);
+        } catch (error) {
+            console.error("Failed to add message:", error);
+        }
     }
   }
 
@@ -59,6 +90,7 @@ export const useConversationsStore = defineStore('conversations', () => {
     conversations,
     activeConversationId,
     activeConversation,
+    fetchConversations,
     addConversation,
     deleteConversation,
     selectConversation,

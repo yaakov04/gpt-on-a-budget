@@ -1,14 +1,16 @@
-<script setup lang="ts">
+'''<script setup lang="ts">
 import Sidebar from './components/Sidebar.vue';
 import ChatView from './components/ChatView.vue';
 import Dropdown from './components/Dropdown.vue';
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { ChevronDown, User, LogOut } from 'lucide-vue-next';
+import { useConversationsStore } from './stores/conversations';
 
 const models = ref(['GPT-4', 'GPT-3.5-Turbo', 'Gemini-Pro']);
 const selectedModel = ref('GPT-4');
 
 const isSidebarExpanded = ref(true);
+const conversationsStore = useConversationsStore();
 
 const toggleSidebar = () => {
   isSidebarExpanded.value = !isSidebarExpanded.value;
@@ -25,6 +27,7 @@ const handleResize = () => {
 onMounted(() => {
   window.addEventListener('resize', handleResize);
   handleResize(); // Initial check
+  conversationsStore.fetchConversations(); // Fetch conversations on startup
 });
 
 onUnmounted(() => {
@@ -84,3 +87,4 @@ onUnmounted(() => {
 <style>
 /* Global styles can go here if not handled by Tailwind */
 </style>
+'''
