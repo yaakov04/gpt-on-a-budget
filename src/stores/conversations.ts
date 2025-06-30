@@ -41,8 +41,16 @@ export const useConversationsStore = defineStore('conversations', () => {
 
   async function addConversation() {
     try {
+      let newTitle = 'New Chat';
+      let counter = 0;
+      while (conversations.value.some(conv => conv.title === newTitle + (counter > 0 ? ` ${counter}` : ''))) {
+        counter++;
+      }
+      if (counter > 0) {
+        newTitle += ` ${counter}`;
+      }
       const newConversation = await invoke<Conversation>('create_conversation', {
-        title: `New Chat ${conversations.value.length + 1}`,
+        title: newTitle,
       });
       conversations.value.unshift(newConversation); // Add to the top
       activeConversationId.value = newConversation.id;
