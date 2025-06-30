@@ -32,7 +32,7 @@ impl LLM for OpenAIProvider {
     async fn chat(&self, messages: Vec<Message>) -> Result<Message, String> {
         let url = "https://api.openai.com/v1/chat/completions";
         let body = serde_json::json!({
-            "model": "gpt-3.5-turbo",
+            "model": "gpt-4o-mini",
             "messages": messages,
         });
 
