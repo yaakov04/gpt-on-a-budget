@@ -1,4 +1,4 @@
-'''<script setup lang="ts">
+<script setup lang="ts">
 import { ref, watch, nextTick } from 'vue';
 import Message from './Message.vue';
 import MessageInput from './MessageInput.vue';
@@ -90,4 +90,3 @@ const handleSendMessage = async (text: string) => {
   100% { transform: rotate(360deg); }
 }
 </style>
-'''

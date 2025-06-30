@@ -1,4 +1,4 @@
-'''<script setup lang="ts">
+<script setup lang="ts">
 import Sidebar from './components/Sidebar.vue';
 import ChatView from './components/ChatView.vue';
 import Dropdown from './components/Dropdown.vue';
@@ -87,4 +87,4 @@ onUnmounted(() => {
 <style>
 /* Global styles can go here if not handled by Tailwind */
 </style>
-'''
+
