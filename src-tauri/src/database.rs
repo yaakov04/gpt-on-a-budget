@@ -1,6 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::{migrate::MigrateDatabase, FromRow, Sqlite, SqlitePool};
+use chrono;
 
 pub type DbPool = SqlitePool;
 
@@ -53,17 +54,22 @@ pub async fn create_conversation(
         title,
         llm_provider
     )
-    .execute(&mut *transaction)
+    .execute(&mut *transaction) // Corrected: pass &mut *transaction
     .await?
     .last_insert_rowid();
 
-    // Use a type that can be either a Pool or a Transaction
-    let mut conversation = get_conversation_internal(pool, conversation_id).await?;
+    // Create the Conversation struct directly from the inserted data
+    let new_conversation = Conversation {
+        id: conversation_id,
+        title: title.to_string(),
+        created_at: chrono::Utc::now().to_rfc3339(), // Use current timestamp
+        llm_provider: llm_provider.to_string(),
+        messages: Vec::new(), // No messages yet for a new conversation
+    };
+
     transaction.commit().await?;
     
-    conversation.messages = Vec::new();
-
-    Ok(conversation)
+    Ok(new_conversation)
 }
 
 // An internal function to get a conversation without its messages
@@ -111,9 +117,17 @@ pub async fn add_message(
     .await?
     .last_insert_rowid();
 
-    let message = get_message(pool, message_id).await?;
+    // Create the Message struct directly from the inserted data
+    let new_message = Message {
+        id: message_id,
+        conversation_id,
+        role: role.to_string(),
+        content: content.to_string(),
+        created_at: chrono::Utc::now().to_rfc3339(), // Use current timestamp
+    };
+
     transaction.commit().await?;
-    Ok(message)
+    Ok(new_message)
 }
 
 pub async fn get_message(pool: &DbPool, id: i64) -> Result<Message> {
@@ -146,3 +160,4 @@ pub async fn delete_conversation(pool: &DbPool, id: i64) -> Result<()> {
     transaction.commit().await?;
     Ok(())
 }
+
