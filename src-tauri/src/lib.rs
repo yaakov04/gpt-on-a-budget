@@ -3,55 +3,33 @@
 
 mod database;
 mod llm;
+mod crypto_manager;
 
-use database::{DbPool, Conversation, Message};
+use database::{DbPool, Conversation, Message, create_conversation, get_conversations, add_message, delete_conversation};
 use llm::{LLM, OpenAIProvider};
-use tauri::State;
+use tauri::Manager;
 
 // Tauri Commands
 
 #[tauri::command]
-async fn get_conversations(pool: State<'_, DbPool>) -> Result<Vec<Conversation>, String> {
-    database::get_all_conversations(&pool)
-        .await
-        .map_err(|e| e.to_string())
+async fn set_api_key(app: tauri::AppHandle, api_key: String) -> Result<(), String> {
+    let app_data_dir = app.path().app_data_dir().expect("Failed to get app data dir");
+    crypto_manager::encrypt_and_save_api_key(app_data_dir, &api_key)
 }
 
 #[tauri::command]
-async fn create_conversation(
-    pool: State<'_, DbPool>,
-    title: String,
-) -> Result<Conversation, String> {
-    // For now, llm_provider is hardcoded. This will be dynamic in the future.
-    database::create_conversation(&pool, &title, "openai")
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn delete_conversation(pool: State<'_, DbPool>, id: i64) -> Result<(), String> {
-    database::delete_conversation(&pool, id)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn add_message(
-    pool: State<'_, DbPool>,
-    conversation_id: i64,
-    role: String,
-    content: String,
-) -> Result<Message, String> {
-    database::add_message(&pool, conversation_id, &role, &content)
-        .await
-        .map_err(|e| e.to_string())
+async fn get_api_key(app: tauri::AppHandle) -> Result<String, String> {
+    let app_data_dir = app.path().app_data_dir().expect("Failed to get app data dir");
+    crypto_manager::decrypt_api_key(app_data_dir)
 }
 
 #[tauri::command]
 async fn chat_with_llm(
     messages: Vec<llm::Message>,
-    llm_provider: State<'_, OpenAIProvider>,
+    app: tauri::AppHandle,
 ) -> Result<llm::Message, String> {
+    let api_key = get_api_key(app).await?;
+    let llm_provider = OpenAIProvider::new(api_key);
     llm_provider.chat(messages).await
 }
 
@@ -68,19 +46,17 @@ async fn run_async() {
         .await
         .expect("Failed to initialize database");
 
-    let openai_api_key = std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY must be set.");
-    let openai_provider = OpenAIProvider::new(openai_api_key);
-
     tauri::Builder::default()
         .manage(db_pool)
-        .manage(openai_provider)
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_conversations,
-            create_conversation,
-            delete_conversation,
-            add_message,
-            chat_with_llm
+            database::create_conversation,
+            database::delete_conversation,
+            database::add_message,
+            chat_with_llm,
+            set_api_key,
+            get_api_key
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

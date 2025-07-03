@@ -51,6 +51,7 @@ export const useConversationsStore = defineStore('conversations', () => {
       }
       const newConversation = await invoke<Conversation>('create_conversation', {
         title: newTitle,
+        llmProvider: 'openai', // Add the llmProvider here
       });
       conversations.value.unshift(newConversation); // Add to the top
       activeConversationId.value = newConversation.id;

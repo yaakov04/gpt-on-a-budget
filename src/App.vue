@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Sidebar from './components/Sidebar.vue';
 import ChatView from './components/ChatView.vue';
+import Settings from './components/Settings.vue';
 import Dropdown from './components/Dropdown.vue';
 import { ref, onMounted, onUnmounted } from 'vue';
 import { ChevronDown, User, LogOut } from 'lucide-vue-next';
@@ -10,10 +11,21 @@ const models = ref(['GPT-4', 'GPT-3.5-Turbo', 'Gemini-Pro']);
 const selectedModel = ref('GPT-4');
 
 const isSidebarExpanded = ref(true);
+const showSettings = ref(false);
 const conversationsStore = useConversationsStore();
 
 const toggleSidebar = () => {
   isSidebarExpanded.value = !isSidebarExpanded.value;
+};
+
+const handleNewChat = () => {
+  conversationsStore.addConversation();
+  showSettings.value = false;
+};
+
+const handleSelectConversation = (id: number) => {
+  conversationsStore.selectConversation(id);
+  showSettings.value = false;
 };
 
 const handleResize = () => {
@@ -39,7 +51,13 @@ onUnmounted(() => {
 <template>
   <div class="flex h-screen bg-gray-800 text-white">
     <!-- Sidebar -->
-    <Sidebar :is-expanded="isSidebarExpanded" @toggle-sidebar="toggleSidebar" />
+    <Sidebar 
+      :is-expanded="isSidebarExpanded" 
+      @toggle-sidebar="toggleSidebar" 
+      @show-settings="showSettings = true"
+      @new-chat="handleNewChat"
+      @select-conversation="handleSelectConversation"
+    />
 
     <!-- Main Content -->
     <div class="flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out" >
@@ -78,7 +96,8 @@ onUnmounted(() => {
       </header>
 
       <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-800">
-        <ChatView />
+        <Settings v-if="showSettings" />
+        <ChatView v-else />
       </main>
     </div>
   </div>

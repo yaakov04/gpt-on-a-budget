@@ -1,4 +1,5 @@
 use anyhow::Result;
+use tauri::State;
 use serde::{Deserialize, Serialize};
 use sqlx::{migrate::MigrateDatabase, FromRow, Sqlite, SqlitePool};
 use chrono;
@@ -11,7 +12,7 @@ pub struct Conversation {
     pub title: String,
     pub created_at: String,
     pub llm_provider: String,
-    #[sqlx(skip)] // This field is not in the DB, it's populated manually
+    #[sqlx(skip)]
     #[serde(default)]
     pub messages: Vec<Message>,
 }
@@ -43,69 +44,71 @@ pub async fn init_db(db_url: &str) -> Result<DbPool> {
     Ok(pool)
 }
 
+#[tauri::command]
 pub async fn create_conversation(
-    pool: &DbPool,
+    pool: State<'_, DbPool>,
     title: &str,
     llm_provider: &str,
-) -> Result<Conversation> {
-    let mut transaction = pool.begin().await?;
+) -> Result<Conversation, String> {
+    let mut transaction = pool.begin().await.map_err(|e| e.to_string())?;
+
     let conversation_id = sqlx::query!(
         "INSERT INTO conversations (title, llm_provider) VALUES (?, ?)",
         title,
         llm_provider
     )
-    .execute(&mut *transaction) // Corrected: pass &mut *transaction
-    .await?
+    .execute(&mut *transaction)
+    .await
+    .map_err(|e| e.to_string())?
     .last_insert_rowid();
 
-    // Create the Conversation struct directly from the inserted data
     let new_conversation = Conversation {
         id: conversation_id,
         title: title.to_string(),
-        created_at: chrono::Utc::now().to_rfc3339(), // Use current timestamp
+        created_at: chrono::Utc::now().to_rfc3339(),
         llm_provider: llm_provider.to_string(),
-        messages: Vec::new(), // No messages yet for a new conversation
+        messages: Vec::new(),
     };
 
-    transaction.commit().await?;
-    
+    transaction.commit().await.map_err(|e| e.to_string())?;
+
     Ok(new_conversation)
 }
 
-// An internal function to get a conversation without its messages
-async fn get_conversation_internal(pool: &DbPool, id: i64) -> Result<Conversation> {
-    Ok(sqlx::query_as::<_, Conversation>("SELECT * FROM conversations WHERE id = ?")
+// Helper interno
+async fn get_conversation_internal(pool: &DbPool, id: i64) -> Result<Conversation, sqlx::Error> {
+    sqlx::query_as::<_, Conversation>("SELECT * FROM conversations WHERE id = ?")
         .bind(id)
         .fetch_one(pool)
-        .await?)
+        .await
 }
 
-pub async fn get_conversation(pool: &DbPool, id: i64) -> Result<Conversation> {
-    let mut conversation = get_conversation_internal(pool, id).await?;
-    conversation.messages = get_messages_for_conversation(pool, id).await?;
-    Ok(conversation)
-}
-
-pub async fn get_all_conversations(pool: &DbPool) -> Result<Vec<Conversation>> {
-    let mut conversations =
-        sqlx::query_as::<_, Conversation>("SELECT * FROM conversations ORDER BY created_at DESC")
-            .fetch_all(pool)
-            .await?;
+#[tauri::command]
+pub async fn get_conversations(
+    pool: State<'_, DbPool>,
+) -> Result<Vec<Conversation>, String> {
+    let mut conversations = sqlx::query_as::<_, Conversation>(
+        "SELECT * FROM conversations ORDER BY created_at DESC"
+    )
+    .fetch_all(&*pool)
+    .await
+    .map_err(|e| e.to_string())?;
 
     for conv in &mut conversations {
-        conv.messages = get_messages_for_conversation(pool, conv.id).await?;
+        conv.messages = get_messages_for_conversation(&pool, conv.id).await?;
     }
 
     Ok(conversations)
 }
 
+#[tauri::command]
 pub async fn add_message(
-    pool: &DbPool,
+    pool: State<'_, DbPool>,
     conversation_id: i64,
     role: &str,
     content: &str,
-) -> Result<Message> {
-    let mut transaction = pool.begin().await?;
+) -> Result<Message, String> {
+    let mut transaction = pool.begin().await.map_err(|e| e.to_string())?;
 
     let message_id = sqlx::query!(
         "INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)",
@@ -114,50 +117,56 @@ pub async fn add_message(
         content
     )
     .execute(&mut *transaction)
-    .await?
+    .await
+    .map_err(|e| e.to_string())?
     .last_insert_rowid();
 
-    // Create the Message struct directly from the inserted data
     let new_message = Message {
         id: message_id,
         conversation_id,
         role: role.to_string(),
         content: content.to_string(),
-        created_at: chrono::Utc::now().to_rfc3339(), // Use current timestamp
+        created_at: chrono::Utc::now().to_rfc3339(),
     };
 
-    transaction.commit().await?;
-    Ok(new_message)
-}
+    transaction.commit().await.map_err(|e| e.to_string())?;
 
-pub async fn get_message(pool: &DbPool, id: i64) -> Result<Message> {
-    Ok(sqlx::query_as::<_, Message>("SELECT * FROM messages WHERE id = ?")
-        .bind(id)
-        .fetch_one(pool)
-        .await?)
+    Ok(new_message)
 }
 
 pub async fn get_messages_for_conversation(
     pool: &DbPool,
     conversation_id: i64,
-) -> Result<Vec<Message>> {
-    Ok(sqlx::query_as::<_, Message>(
+) -> Result<Vec<Message>, String> {
+    let result = sqlx::query_as::<_, Message>(
         "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC",
     )
     .bind(conversation_id)
     .fetch_all(pool)
-    .await?)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(result)
 }
 
-pub async fn delete_conversation(pool: &DbPool, id: i64) -> Result<()> {
-    let mut transaction = pool.begin().await?;
+#[tauri::command]
+pub async fn delete_conversation(
+    pool: State<'_, DbPool>,
+    id: i64,
+) -> Result<(), String> {
+    let mut transaction = pool.begin().await.map_err(|e| e.to_string())?;
+
     sqlx::query!("DELETE FROM messages WHERE conversation_id = ?", id)
         .execute(&mut *transaction)
-        .await?;
+        .await
+        .map_err(|e| e.to_string())?;
+
     sqlx::query!("DELETE FROM conversations WHERE id = ?", id)
         .execute(&mut *transaction)
-        .await?;
-    transaction.commit().await?;
+        .await
+        .map_err(|e| e.to_string())?;
+
+    transaction.commit().await.map_err(|e| e.to_string())?;
+
     Ok(())
 }
-

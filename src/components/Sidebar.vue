@@ -9,7 +9,7 @@
       </button>
     </div>
     <nav class="flex-1 space-y-2 p-4 overflow-hidden">
-      <a href="#" class="flex items-center py-2 px-4 rounded hover:bg-gray-700" @click="conversationsStore.addConversation()">
+      <a href="#" class="flex items-center py-2 px-4 rounded hover:bg-gray-700" @click="$emit('new-chat')">
         <Plus class="w-5 h-5 mr-3" />
         <span v-if="isExpanded">New Chat</span>
       </a>
@@ -17,7 +17,7 @@
       <a v-if="isExpanded" v-for="conversation in conversationsStore.conversations" :key="conversation.id"
         href="#" class="flex items-center justify-between py-2 px-4 rounded hover:bg-gray-700 truncate"
         :class="{ 'bg-gray-700': conversation.id === conversationsStore.activeConversationId }"
-        @click="conversationsStore.selectConversation(conversation.id)">
+        @click="$emit('select-conversation', conversation.id)">
         <span>{{ conversation.title }}</span>
         <button @click.stop="conversationsStore.deleteConversation(conversation.id)" class="text-gray-400 hover:text-white">
           <Trash2 class="w-4 h-4" />
@@ -25,7 +25,7 @@
       </a>
     </nav>
     <div class="p-4 border-t border-gray-700 h-20 flex items-center">
-      <a href="#" class="flex items-center py-2 px-4 rounded hover:bg-gray-700">
+      <a href="#" @click="$emit('show-settings')" class="flex items-center py-2 px-4 rounded hover:bg-gray-700">
         <Settings class="w-5 h-5 mr-3" />
         <span v-if="isExpanded">Settings</span>
       </a>
@@ -46,7 +46,7 @@ defineProps({
   },
 });
 
-defineEmits(['toggle-sidebar']);
+defineEmits(['toggle-sidebar', 'show-settings', 'new-chat', 'select-conversation']);
 </script>
 
 <style scoped>
