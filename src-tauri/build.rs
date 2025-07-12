@@ -1,6 +1,7 @@
 use std::process::Command;
 use std::env;
 use std::path::PathBuf;
+use std::fs;
 
 fn main() {
     // Tell Cargo that if the given file changes, to rerun this build script.
@@ -11,9 +12,15 @@ fn main() {
     let manifest_path = PathBuf::from(manifest_dir);
 
     // Construct the absolute path to the data directory
-    // This assumes 'data' is a sibling of 'src-tauri'
     let project_root = manifest_path.parent().expect("Failed to get project root");
     let data_dir = project_root.join("data");
+
+    // Create data directory if it doesn't exist
+    if !data_dir.exists() {
+        fs::create_dir_all(&data_dir).expect("Failed to create data directory");
+        println!("Created data directory at: {:?}", data_dir);
+    }
+
     let db_path = data_dir.join("db.sqlite");
 
     let db_url = format!("sqlite:{}", db_path.to_str().expect("Failed to convert path to string"));
