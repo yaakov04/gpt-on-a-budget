@@ -1,6 +1,8 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::env;
+
 mod database;
 mod llm;
 mod crypto_manager;
@@ -36,18 +38,7 @@ async fn chat_with_llm(
 // Main App Setup
 
 async fn run_async() {
-    dotenvy::dotenv().expect("Failed to load .env file");
-
-    let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set.");
-
-    println!("Using database URL: {}", db_url);
-
-    let db_pool = database::init_db(&db_url)
-        .await
-        .expect("Failed to initialize database");
-
-    tauri::Builder::default()
-        .manage(db_pool)
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_conversations,
@@ -57,9 +48,21 @@ async fn run_async() {
             chat_with_llm,
             set_api_key,
             get_api_key
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        ]);
+
+    let app = builder
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    let db_url = resolve_database_path(&app.handle());
+    println!("Using database URL: {}", db_url);
+
+    let db_pool = database::init_db(&db_url)
+        .await
+        .expect("Failed to initialize database");
+
+    app.manage(db_pool);
+    app.run(|_app_handle, _event| {});
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -67,5 +70,28 @@ pub fn run() {
     // Encapsulate async logic in a tokio runtime
     tokio::runtime::Runtime::new()
         .unwrap()
-        .block_on(run_async());
+                .block_on(run_async());
+}
+
+fn resolve_database_path(app: &tauri::AppHandle) -> String {
+    let db_name = "db.sqlite";
+    let db_path = if cfg!(debug_assertions) {
+        // Development: use the data directory in the project root
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let project_root = std::path::Path::new(manifest_dir).parent().unwrap();
+        let data_dir = project_root.join("data");
+        if !data_dir.exists() {
+            std::fs::create_dir_all(&data_dir).expect("Failed to create data directory");
+        }
+        data_dir.join(db_name)
+    } else {
+        // Production: use the app's data directory
+        let app_data_dir = app.path().app_data_dir().expect("Failed to get app data dir");
+        if !app_data_dir.exists() {
+            std::fs::create_dir_all(&app_data_dir).expect("Failed to create app data directory");
+        }
+        app_data_dir.join(db_name)
+    };
+
+    format!("sqlite:{}", db_path.to_str().unwrap())
 }
