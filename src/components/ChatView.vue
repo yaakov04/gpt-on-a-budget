@@ -56,7 +56,7 @@ const handleSendMessage = async (text: string) => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div v-if="conversationsStore.activeConversation" class="flex flex-col h-full">
     <!-- Messages Display -->
     <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
       <Message 
@@ -72,6 +72,13 @@ const handleSendMessage = async (text: string) => {
 
     <!-- Message Input -->
     <MessageInput @send-message="handleSendMessage" :is-loading="isLoading" />
+  </div>
+  <div v-else class="flex flex-col h-full items-center justify-center">
+    <h2 class="text-2xl font-bold mb-4">No chat selected</h2>
+    <p class="text-gray-400 mb-6">Create a new chat to start messaging.</p>
+    <button @click="conversationsStore.addConversation()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+      New Chat
+    </button>
   </div>
 </template>
 

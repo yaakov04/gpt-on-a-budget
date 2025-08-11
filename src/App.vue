@@ -3,9 +3,11 @@ import Sidebar from './components/Sidebar.vue';
 import ChatView from './components/ChatView.vue';
 import Settings from './components/Settings.vue';
 import Dropdown from './components/Dropdown.vue';
+import ApiKeyModal from './components/ApiKeyModal.vue';
 import { ref, onMounted, onUnmounted } from 'vue';
 import { ChevronDown, User, LogOut } from 'lucide-vue-next';
 import { useConversationsStore } from './stores/conversations';
+import { useSettingsStore } from './stores/settings';
 
 const models = ref(['GPT-4', 'GPT-3.5-Turbo', 'Gemini-Pro']);
 const selectedModel = ref('GPT-4');
@@ -13,6 +15,7 @@ const selectedModel = ref('GPT-4');
 const isSidebarExpanded = ref(true);
 const showSettings = ref(false);
 const conversationsStore = useConversationsStore();
+const settingsStore = useSettingsStore();
 
 const toggleSidebar = () => {
   isSidebarExpanded.value = !isSidebarExpanded.value;
@@ -36,10 +39,13 @@ const handleResize = () => {
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('resize', handleResize);
   handleResize(); // Initial check
-  conversationsStore.fetchConversations(); // Fetch conversations on startup
+  await settingsStore.checkApiKey();
+  if (settingsStore.isApiKeySet) {
+    conversationsStore.fetchConversations(); // Fetch conversations on startup
+  }
 });
 
 onUnmounted(() => {
@@ -50,6 +56,7 @@ onUnmounted(() => {
 
 <template>
   <div class="flex h-screen bg-gray-800 text-white">
+    <ApiKeyModal v-if="!settingsStore.isApiKeySet" />
     <!-- Sidebar -->
     <Sidebar 
       :is-expanded="isSidebarExpanded" 
