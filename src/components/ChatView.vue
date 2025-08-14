@@ -2,7 +2,7 @@
 import { ref, watch, nextTick } from 'vue';
 import Message from './Message.vue';
 import MessageInput from './MessageInput.vue';
-import { useConversationsStore } from '../stores/conversations';
+import { useConversationsStore, MessageContent, ContentBlock } from '../stores/conversations';
 import { invoke } from '@tauri-apps/api/core';
 
 const conversationsStore = useConversationsStore();
@@ -21,23 +21,36 @@ watch(() => conversationsStore.activeConversation?.messages, () => {
   scrollToBottom();
 }, { deep: true });
 
-const handleSendMessage = async (text: string) => {
+const handleSendMessage = async (payload: { text: string, image: string | null }) => {
   if (!conversationsStore.activeConversation) return;
 
   const conversationId = conversationsStore.activeConversation.id;
   
-  // Add user message and persist it
-  await conversationsStore.addMessageToConversation(conversationId, 'user', text);
+  let content: MessageContent;
+  if (payload.image) {
+    const contentBlocks: ContentBlock[] = [
+      { type: 'text', text: payload.text },
+      { type: 'image_url', image_url: { url: payload.image } }
+    ];
+    content = contentBlocks;
+  } else {
+    content = payload.text;
+  }
+
+  // Add user message to the store. The store will stringify it for the DB.
+  await conversationsStore.addMessageToConversation(conversationId, 'user', content);
 
   isLoading.value = true;
 
   try {
-    // Prepare messages for the LLM API call
     const apiMessages = conversationsStore.activeConversation.messages.map(msg => ({
       role: msg.role,
       content: msg.content,
     }));
 
+    console.log(apiMessages);
+
+    // The backend returns a Message with a string content field due to #[serde(untagged)]
     const response: { role: string; content: string } = await invoke('chat_with_llm', {
       messages: apiMessages,
     });
@@ -47,8 +60,8 @@ const handleSendMessage = async (text: string) => {
 
   } catch (error) {
     console.error('Error calling chat_with_llm:', error);
-    // Optionally add an error message to the conversation
-    await conversationsStore.addMessageToConversation(conversationId, 'assistant', `Error: ${error}`);
+    const errorContent = `Error: ${error}`;
+    await conversationsStore.addMessageToConversation(conversationId, 'assistant', errorContent);
   } finally {
     isLoading.value = false;
   }

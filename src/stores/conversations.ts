@@ -2,12 +2,35 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 
-// Matching the Rust structs
+// --- Multimodal Types ---
+export interface ImageUrl {
+  url: string;
+}
+
+export interface ContentBlock {
+  type: 'text' | 'image_url';
+  text?: string;
+  image_url?: ImageUrl;
+}
+
+export type MessageContent = string | ContentBlock[];
+
+// --- Store Types ---
+// Interface for messages received from the DB (content is a JSON string)
+interface RawMessage {
+  id: number;
+  conversation_id: number;
+  role: 'user' | 'assistant' | 'system';
+  content: string; // This will be a JSON string
+  created_at: string;
+}
+
+// Interface for messages used in the UI (content is a parsed object)
 export interface Message {
   id: number;
   conversation_id: number;
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: MessageContent;
   created_at: string;
 }
 
@@ -17,6 +40,22 @@ export interface Conversation {
   created_at: string;
   llm_provider: string;
   messages: Message[];
+}
+
+// Helper to parse message content
+function parseMessageContent(messages: RawMessage[]): Message[] {
+  return messages.map(msg => {
+    try {
+      // Assistant messages content are plain text, not JSON
+      if (msg.role === 'assistant') {
+        return { ...msg, content: msg.content };
+      }
+      return { ...msg, content: JSON.parse(msg.content) };
+    } catch (e) {
+      // If parsing fails, treat it as a plain string (for legacy messages)
+      return { ...msg, content: msg.content };
+    }
+  });
 }
 
 export const useConversationsStore = defineStore('conversations', () => {
@@ -29,8 +68,12 @@ export const useConversationsStore = defineStore('conversations', () => {
 
   async function fetchConversations() {
     try {
-      const fetchedConversations = await invoke<Conversation[]>('get_conversations');
-      conversations.value = fetchedConversations;
+      const fetchedConversations = await invoke<any[]>('get_conversations');
+      conversations.value = fetchedConversations.map(conv => ({
+        ...conv,
+        messages: parseMessageContent(conv.messages),
+      }));
+
       if (conversations.value.length > 0 && !activeConversationId.value) {
         activeConversationId.value = conversations.value[0].id;
       }
@@ -51,9 +94,9 @@ export const useConversationsStore = defineStore('conversations', () => {
       }
       const newConversation = await invoke<Conversation>('create_conversation', {
         title: newTitle,
-        llmProvider: 'openai', // Add the llmProvider here
+        llmProvider: 'openai',
       });
-      conversations.value.unshift(newConversation); // Add to the top
+      conversations.value.unshift(newConversation);
       activeConversationId.value = newConversation.id;
     } catch (error) {
       console.error("Failed to create conversation:", error);
@@ -79,16 +122,24 @@ export const useConversationsStore = defineStore('conversations', () => {
     activeConversationId.value = id;
   }
 
-  async function addMessageToConversation(conversationId: number, role: 'user' | 'assistant', content: string) {
+  async function addMessageToConversation(conversationId: number, role: 'user' | 'assistant', content: MessageContent) {
     const conversation = conversations.value.find(conv => conv.id === conversationId);
     if (conversation) {
         try {
-            const newMessage = await invoke<Message>('add_message', {
+            // Stringify the content object for DB storage
+            const contentForDb = JSON.stringify(content);
+
+            const newMessage: RawMessage = await invoke('add_message', {
                 conversationId,
                 role,
-                content,
+                content: contentForDb,
             });
-            conversation.messages.push(newMessage);
+
+            // Push the parsed message to the store
+            conversation.messages.push({
+              ...newMessage,
+              content: content, // Use the rich content object we already have
+            });
         } catch (error) {
             console.error("Failed to add message:", error);
         }
