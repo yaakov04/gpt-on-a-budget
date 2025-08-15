@@ -38,13 +38,15 @@ pub trait LLM: Send + Sync {
 
 pub struct OpenAIProvider {
     api_key: String,
+    model: String,
     client: reqwest::Client,
 }
 
 impl OpenAIProvider {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: String, model: String) -> Self {
         Self {
             api_key,
+            model,
             client: reqwest::Client::new(),
         }
     }
@@ -55,7 +57,7 @@ impl LLM for OpenAIProvider {
     async fn chat(&self, messages: Vec<Message>) -> Result<Message, String> {
         let url = "https://api.openai.com/v1/chat/completions";
         let body = serde_json::json!({
-            "model": "gpt-4o-mini",
+            "model": &self.model,
             "messages": messages,
         });
 
@@ -65,6 +67,12 @@ impl LLM for OpenAIProvider {
             .send()
             .await
             .map_err(|e| format!("Failed to send request: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status(); // Get status before consuming response
+            let error_body = response.text().await.unwrap_or_else(|_| "Failed to read error body".to_string());
+            return Err(format!("API request failed with status: {}. Body: {}", status, error_body));
+        }
 
         let response_json: serde_json::Value = response.json().await.map_err(|e| format!("Failed to parse response: {}", e))?;
 

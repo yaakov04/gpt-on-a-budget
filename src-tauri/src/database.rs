@@ -170,3 +170,49 @@ pub async fn delete_conversation(
 
     Ok(())
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct LlmModel {
+    pub id: i64,
+    pub model_name: String,
+    pub provider: String,
+    pub is_default: bool,
+}
+
+#[tauri::command]
+pub async fn get_available_models(pool: State<'_, DbPool>) -> Result<Vec<LlmModel>, String> {
+    sqlx::query_as::<_, LlmModel>("SELECT * FROM llm_models ORDER BY provider, model_name")
+        .fetch_all(&*pool)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_default_model(pool: State<'_, DbPool>) -> Result<LlmModel, String> {
+    sqlx::query_as::<_, LlmModel>("SELECT * FROM llm_models WHERE is_default = 1 LIMIT 1")
+        .fetch_one(&*pool)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn set_default_model(pool: State<'_, DbPool>, model_id: i64) -> Result<(), String> {
+    let mut transaction = pool.begin().await.map_err(|e| e.to_string())?;
+
+    // Reset the current default
+    sqlx::query("UPDATE llm_models SET is_default = 0")
+        .execute(&mut *transaction)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Set the new default
+    sqlx::query("UPDATE llm_models SET is_default = 1 WHERE id = ?")
+        .bind(model_id)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    transaction.commit().await.map_err(|e| e.to_string())?;
+
+    Ok(())
+}

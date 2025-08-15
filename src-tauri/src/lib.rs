@@ -7,7 +7,9 @@ mod database;
 mod llm;
 mod crypto_manager;
 
-use database::{DbPool, Conversation, Message, create_conversation, get_conversations, add_message, delete_conversation};
+use database::{
+    DbPool, Conversation, Message, create_conversation, get_conversations, add_message, delete_conversation, LlmModel, get_available_models, get_default_model, set_default_model
+};
 use llm::{LLM, OpenAIProvider};
 use tauri::Manager;
 
@@ -30,8 +32,15 @@ async fn chat_with_llm(
     messages: Vec<llm::Message>,
     app: tauri::AppHandle,
 ) -> Result<llm::Message, String> {
-    let api_key = get_api_key(app).await?;
-    let llm_provider = OpenAIProvider::new(api_key);
+    let api_key = get_api_key(app.clone()).await?;
+    
+    // Get the DbPool state
+    let pool = app.state::<DbPool>();
+
+    // Get the default model from the database
+    let default_llm_model = database::get_default_model(pool).await?;
+
+    let llm_provider = OpenAIProvider::new(api_key, default_llm_model.model_name);
     llm_provider.chat(messages).await
 }
 
@@ -47,7 +56,10 @@ async fn run_async() {
             database::add_message,
             chat_with_llm,
             set_api_key,
-            get_api_key
+            get_api_key,
+            database::get_available_models,
+            database::get_default_model,
+            database::set_default_model
         ]);
 
     let app = builder

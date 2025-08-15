@@ -8,9 +8,18 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { ChevronDown, User, LogOut } from 'lucide-vue-next';
 import { useConversationsStore } from './stores/conversations';
 import { useSettingsStore } from './stores/settings';
+import { invoke } from '@tauri-apps/api/core';
 
-const models = ref(['GPT-4', 'GPT-3.5-Turbo', 'Gemini-Pro']);
-const selectedModel = ref('GPT-4');
+// Interface for the model object from the backend
+interface LlmModel {
+  id: number;
+  model_name: string;
+  provider: string;
+  is_default: boolean;
+}
+
+const models = ref<LlmModel[]>([]);
+const selectedModel = ref<LlmModel | null>(null);
 
 const isSidebarExpanded = ref(true);
 const showSettings = ref(false);
@@ -39,6 +48,26 @@ const handleResize = () => {
   }
 };
 
+const loadModels = async () => {
+  try {
+    models.value = await invoke('get_available_models');
+    selectedModel.value = await invoke('get_default_model');
+  } catch (error) {
+    console.error("Failed to load LLM models:", error);
+    // Optionally, set some default/error state
+  }
+};
+
+const handleModelSelect = async (model: LlmModel) => {
+  selectedModel.value = model;
+  try {
+    await invoke('set_default_model', { modelId: model.id });
+  } catch (error) {
+    console.error("Failed to set default model:", error);
+    // Optionally, revert the selection or show an error to the user
+  }
+};
+
 onMounted(async () => {
   window.addEventListener('resize', handleResize);
   handleResize(); // Initial check
@@ -46,6 +75,7 @@ onMounted(async () => {
   if (settingsStore.isApiKeySet) {
     conversationsStore.fetchConversations(); // Fetch conversations on startup
   }
+  await loadModels();
 });
 
 onUnmounted(() => {
@@ -58,9 +88,9 @@ onUnmounted(() => {
   <div class="flex h-screen bg-gray-800 text-white">
     <ApiKeyModal v-if="!settingsStore.isApiKeySet" />
     <!-- Sidebar -->
-    <Sidebar 
-      :is-expanded="isSidebarExpanded" 
-      @toggle-sidebar="toggleSidebar" 
+    <Sidebar
+      :is-expanded="isSidebarExpanded"
+      @toggle-sidebar="toggleSidebar"
       @show-settings="showSettings = true"
       @new-chat="handleNewChat"
       @select-conversation="handleSelectConversation"
@@ -70,15 +100,15 @@ onUnmounted(() => {
     <div class="flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out" >
       <header class="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 h-20">
         <!-- Model Selector -->
-        <Dropdown>
+        <Dropdown v-if="selectedModel">
           <template #trigger>
-            <span class="font-semibold">{{ selectedModel }}</span>
+            <span class="font-semibold">{{ selectedModel.model_name }}</span>
             <ChevronDown class="w-5 h-5 ml-1" />
           </template>
           <template #content>
-            <a v-for="model in models" :key="model" href="#" @click="selectedModel = model"
+            <a v-for="model in models" :key="model.id" href="#" @click.prevent="handleModelSelect(model)"
               class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700">
-              {{ model }}
+              {{ model.model_name }}
             </a>
           </template>
         </Dropdown>
